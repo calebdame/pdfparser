@@ -1,130 +1,36 @@
-# app.py
 import os
 import logging
-import base64
-import io
-from typing import List
+from typing import Any
 
-import requests
 from fastapi import FastAPI, Request, HTTPException
-from pdf2image import convert_from_bytes
-from PIL import Image
 
-from openai import OpenAI
+from pdf_service import process_pdf
+from openai_service import send_images_to_openai
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("pdfparser")
 
-
-def process_pdf(file_path: str) -> List[Image.Image]:
-    """Download a PDF, convert to images, and log the page count.
-
-    Args:
-        file_path: Path of the PDF within the storage bucket.
-
-    Returns:
-        List of PIL Image objects representing each PDF page.
-    """
-    base_url = os.environ.get("ENV_URL", "").rstrip("/")
-    if not base_url:
-        logger.warning("ENV_URL not configured; cannot download PDF")
-        return []
-
-    pdf_url = f"{base_url}/{file_path}"
-    logger.info("Downloading PDF from %s", pdf_url)
-
-    try:
-        response = requests.get(pdf_url)
-        response.raise_for_status()
-    except Exception as exc:
-        logger.exception("Failed to download PDF: %s", exc)
-        return []
-
-    try:
-        images = convert_from_bytes(response.content)
-    except Exception as exc:
-        logger.exception("Failed to convert PDF to images: %s", exc)
-        return []
-
-    logger.info("PDF has %d pages", len(images))
-    return images
-
-
-def send_images_to_openai(images: List[Image.Image], command: str, batch_size: int = 20) -> None:
-    """Send images to an OpenAI vision model.
-
-    Args:
-        images: List of PIL Images representing PDF pages.
-        command: Instruction text to send alongside the images.
-        batch_size: Unused. Maintained for backward compatibility.
-
-    Images are converted to grayscale before sending to reduce bandwidth.
-    """
-
-    open_ai_key = os.environ.get("OPEN_AI_KEY")
-    if not open_ai_key:
-        logger.warning("OPEN_AI_KEY not configured; skipping OpenAI call")
-        return
-
-    if not command:
-        logger.warning("COMMAND not configured; skipping OpenAI call")
-        return
-
-    client = OpenAI(api_key=open_ai_key)
-
-    limited_images = images[:20]
-    image_parts = []
-    for img in limited_images:
-        # Convert each page to grayscale before encoding to save bandwidth
-        gray_img = img.convert("L")
-        buffer = io.BytesIO()
-        gray_img.save(buffer, format="PNG")
-        b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-        image_parts.append(
-            {
-                "type": "input_image",
-                "image_url": f"data:image/png;base64,{b64}",
-            }
-        )
-
-    try:
-        response = client.responses.create(
-            model=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
-            input=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": command},
-                        *image_parts,
-                    ],
-                }
-            ],
-        )
-        logger.info("OpenAI response: %s", response.output_text)
-    except Exception as exc:
-        logger.exception("OpenAI API call failed: %s", exc)
-
 app = FastAPI()
+
 
 @app.get("/")
 async def root():
     logger.info("Root endpoint called")
     return {"status": "running"}
 
+
 @app.post("/webhook")
 async def webhook(request: Request):
     expected = os.environ.get("WEBHOOK_AUTH_TOKEN", "").strip()
 
-    # Extract token from headers
     auth = request.headers.get("Authorization", "")
     x_token = request.headers.get("X-Webhook-Token", "").strip()
 
     if auth.startswith("Bearer "):
         received = auth.split("Bearer ", 1)[1].strip()
     else:
-        received = x_token  # fallback to custom header
+        received = x_token
 
-    # Enforce token if configured
     if expected:
         if not received:
             logger.warning("Missing auth token (Authorization or X-Webhook-Token)")
@@ -135,7 +41,6 @@ async def webhook(request: Request):
     else:
         logger.warning("WEBHOOK_AUTH_TOKEN not set; skipping auth check")
 
-    # Read payload (JSON first, then raw)
     try:
         payload = await request.json()
     except Exception:
@@ -144,18 +49,21 @@ async def webhook(request: Request):
 
     logger.info("Received webhook payload: %s", payload)
 
-    file_path = (
-        payload.get("record", {}).get("file_path") if isinstance(payload, dict) else None
-    )
+    record = payload.get("record", {}) if isinstance(payload, dict) else {}
+    file_path = record.get("file_path")
+    document_id: Any = record.get("id")
+
     if file_path:
         images = process_pdf(file_path)
         if images:
             command = os.environ.get("COMMAND", "").strip()
-            send_images_to_openai(images, command=command)
+            send_images_to_openai(images, command=command, document_id=document_id)
 
     return {"status": "received"}
 
+
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("app:app", host="0.0.0.0", port=port)
