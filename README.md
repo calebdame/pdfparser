@@ -13,3 +13,10 @@ Set up a webhook to accept the payload from supabase
 Set `WEBHOOK_AUTH_TOKEN` to require a matching `Authorization` header
 
 Log all data received to console
+
+### Configuration
+
+* `OPEN_AI_KEY` – API key for OpenAI.
+* `OPENAI_MODEL` – optional model override for image labeling. Defaults to
+  `gpt-4o-mini`, which offers a lower-cost alternative while providing
+  high quality results.
