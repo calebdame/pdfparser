@@ -76,7 +76,12 @@ def send_images_to_openai(images: List[Image.Image], command: str, batch_size: i
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
         b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-        image_parts.append({"type": "input_image", "image": b64})
+        image_parts.append(
+            {
+                "type": "input_image",
+                "image_url": f"data:image/png;base64,{b64}",
+            }
+        )
 
     try:
         response = client.responses.create(
