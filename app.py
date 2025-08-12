@@ -1,6 +1,8 @@
 # app.py
 import os
 import logging
+import base64
+import io
 from typing import List
 
 import requests
@@ -8,8 +10,7 @@ from fastapi import FastAPI, Request, HTTPException
 from pdf2image import convert_from_bytes
 from PIL import Image
 
-# Placeholder import for future OpenAI integration
-# import openai
+from openai import OpenAI
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("pdfparser")
@@ -49,21 +50,50 @@ def process_pdf(file_path: str) -> List[Image.Image]:
     return images
 
 
-def send_images_to_openai(images: List[Image.Image], question: str, batch_size: int = 20) -> None:
-    """Send images to an OpenAI vision model in batches.
+def send_images_to_openai(images: List[Image.Image], command: str, batch_size: int = 20) -> None:
+    """Send images to an OpenAI vision model.
 
-    This function is a placeholder for future implementation.
+    Args:
+        images: List of PIL Images representing PDF pages.
+        command: Instruction text to send alongside the images.
+        batch_size: Unused. Maintained for backward compatibility.
     """
+
     open_ai_key = os.environ.get("OPEN_AI_KEY")
     if not open_ai_key:
         logger.warning("OPEN_AI_KEY not configured; skipping OpenAI call")
         return
 
-    for i in range(0, len(images), batch_size):
-        batch = images[i : i + batch_size]
-        logger.debug("Prepared batch of %d images for OpenAI", len(batch))
-        # TODO: Implement OpenAI API call using open_ai_key
-        pass
+    if not command:
+        logger.warning("COMMAND not configured; skipping OpenAI call")
+        return
+
+    client = OpenAI(api_key=open_ai_key)
+
+    limited_images = images[:20]
+    image_parts = []
+    for img in limited_images:
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        image_parts.append({"type": "input_image", "image": b64})
+
+    try:
+        response = client.responses.create(
+            model=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": command},
+                        *image_parts,
+                    ],
+                }
+            ],
+        )
+        logger.info("OpenAI response: %s", response.output_text)
+    except Exception as exc:
+        logger.exception("OpenAI API call failed: %s", exc)
 
 app = FastAPI()
 
@@ -111,7 +141,8 @@ async def webhook(request: Request):
     if file_path:
         images = process_pdf(file_path)
         if images:
-            send_images_to_openai(images, question="Is this document valid?")
+            command = os.environ.get("COMMAND", "").strip()
+            send_images_to_openai(images, command=command)
 
     return {"status": "received"}
 
