@@ -2,18 +2,18 @@ import os
 import logging
 import base64
 import io
-from typing import List, Any
-
-from PIL import Image
-from openai import OpenAI
+from typing import List, Any, TYPE_CHECKING
 
 from supabase_service import update_document_status
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 logger = logging.getLogger("pdfparser.openai_service")
 
 
 def send_images_to_openai(
-    images: List[Image.Image],
+    images: List["Image.Image"],
     command: str,
     document_id: Any = None,
     batch_size: int = 20,
@@ -24,6 +24,10 @@ def send_images_to_openai(
     document understanding tasks. Set the ``OPENAI_MODEL`` environment
     variable to override this choice.
     """
+
+    from PIL import Image  # noqa: F401
+    from openai import OpenAI
+    import gc
 
     open_ai_key = os.environ.get("OPEN_AI_KEY")
     if not open_ai_key:
@@ -44,6 +48,9 @@ def send_images_to_openai(
         gray_img.save(buffer, format="PNG")
         b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
         image_parts.append({"type": "input_image", "image_url": f"data:image/png;base64,{b64}"})
+        buffer.close()
+        gray_img.close()
+        img.close()
 
     try:
         response = client.responses.create(
@@ -61,3 +68,5 @@ def send_images_to_openai(
             update_document_status(document_id, answer)
     except Exception as exc:
         logger.exception("OpenAI API call failed: %s", exc)
+    finally:
+        gc.collect()

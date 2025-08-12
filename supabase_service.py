@@ -1,13 +1,16 @@
 import logging
 import os
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from supabase import create_client, Client
+if TYPE_CHECKING:
+    from supabase import Client
 
 logger = logging.getLogger("pdfparser.supabase_service")
 
 
-def get_client() -> Client | None:
+def get_client() -> "Client" | None:
+    from supabase import create_client
+
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
