@@ -16,13 +16,19 @@ async def root():
 @app.post("/webhook")
 async def webhook(request: Request):
     expected_token = os.environ.get("WEBHOOK_AUTH_TOKEN")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header.split("Bearer ")[-1].strip() if auth_header.startswith("Bearer ") else auth_header
-    if expected_token and token != expected_token:
-        logger.warning("Unauthorized webhook attempt")
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        received = auth.split("Bearer ", 1)[1].strip()
+    else:
+        received = request.headers.get("X-Webhook-Token", "").strip()
+
+    if expected and received != expected:
+        logger.warning(
+            "Unauthorized webhook: have_auth=%s have_x=%s",
+            bool(auth), bool(request.headers.get("X-Webhook-Token"))
+        )
         raise HTTPException(status_code=403, detail="Invalid auth token")
-    if not expected_token:
-        logger.warning("WEBHOOK_AUTH_TOKEN not set; skipping auth check")
+        
     try:
         payload = await request.json()
     except Exception:
