@@ -4,8 +4,6 @@ from typing import Any
 
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 
-from pdf_service import process_pdf
-from openai_service import send_images_to_openai
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("pdfparser")
@@ -21,6 +19,9 @@ async def root():
 
 def _process_document(file_path: str, command: str, document_id: Any) -> None:
     """Convert the PDF to images and send them to OpenAI."""
+    from pdf_service import process_pdf
+    from openai_service import send_images_to_openai
+
     images = process_pdf(file_path)
     if images:
         send_images_to_openai(images, command=command, document_id=document_id)

@@ -1,15 +1,14 @@
 import os
 import logging
-from typing import List
+from typing import List, TYPE_CHECKING
 
-import requests
-from pdf2image import convert_from_bytes
-from PIL import Image
+if TYPE_CHECKING:
+    from PIL import Image
 
 logger = logging.getLogger("pdfparser.pdf_service")
 
 
-def process_pdf(file_path: str) -> List[Image.Image]:
+def process_pdf(file_path: str) -> List["Image.Image"]:
     """Download a PDF, convert to images, and log the page count.
 
     Args:
@@ -18,6 +17,10 @@ def process_pdf(file_path: str) -> List[Image.Image]:
     Returns:
         List of PIL Image objects representing each PDF page.
     """
+    import requests
+    from pdf2image import convert_from_bytes
+    from PIL import Image
+
     base_url = os.environ.get("ENV_URL", "").rstrip("/")
     if not base_url:
         logger.warning("ENV_URL not configured; cannot download PDF")
