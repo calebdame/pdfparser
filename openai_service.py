@@ -18,7 +18,12 @@ def send_images_to_openai(
     document_id: Any = None,
     batch_size: int = 20,
 ) -> None:
-    """Send images to an OpenAI vision model and update Supabase."""
+    """Send images to an OpenAI vision model and update Supabase.
+
+    The default model is ``gpt-4o-mini``, a cost-effective option for
+    document understanding tasks. Set the ``OPENAI_MODEL`` environment
+    variable to override this choice.
+    """
 
     open_ai_key = os.environ.get("OPEN_AI_KEY")
     if not open_ai_key:
@@ -42,7 +47,7 @@ def send_images_to_openai(
 
     try:
         response = client.responses.create(
-            model=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
+            model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
             input=[
                 {
                     "role": "user",
