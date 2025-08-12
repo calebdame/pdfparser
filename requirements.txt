@@ -1,2 +1,6 @@
 fastapi
 uvicorn[standard]
+requests
+pdf2image
+pillow
+openai
