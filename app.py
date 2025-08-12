@@ -2,7 +2,7 @@ import os
 import logging
 from typing import Any
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 
 from pdf_service import process_pdf
 from openai_service import send_images_to_openai
@@ -19,8 +19,15 @@ async def root():
     return {"status": "running"}
 
 
+def _process_document(file_path: str, command: str, document_id: Any) -> None:
+    """Convert the PDF to images and send them to OpenAI."""
+    images = process_pdf(file_path)
+    if images:
+        send_images_to_openai(images, command=command, document_id=document_id)
+
+
 @app.post("/webhook")
-async def webhook(request: Request):
+async def webhook(request: Request, background_tasks: BackgroundTasks):
     expected = os.environ.get("WEBHOOK_AUTH_TOKEN", "").strip()
 
     auth = request.headers.get("Authorization", "")
@@ -52,14 +59,19 @@ async def webhook(request: Request):
     record = payload.get("record", {}) if isinstance(payload, dict) else {}
     file_path = record.get("file_path")
     document_id: Any = record.get("id")
+    status = str(record.get("status", "")).lower()
 
-    if file_path:
-        images = process_pdf(file_path)
-        if images:
-            command = os.environ.get("COMMAND", "").strip()
-            send_images_to_openai(images, command=command, document_id=document_id)
+    if status in {"reviewed", "processed"} or record.get("mock_data_processed"):
+        logger.info("Skipping document %s with status '%s'", document_id, status)
+        return {"status": "skipped"}
 
-    return {"status": "received"}
+    command = os.environ.get("COMMAND", "").strip()
+    if file_path and command:
+        background_tasks.add_task(_process_document, file_path, command, document_id)
+        return {"status": "queued"}
+
+    logger.warning("Missing file_path or COMMAND; nothing queued")
+    return {"status": "ignored"}
 
 
 if __name__ == "__main__":
