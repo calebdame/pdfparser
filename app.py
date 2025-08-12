@@ -57,6 +57,8 @@ def send_images_to_openai(images: List[Image.Image], command: str, batch_size: i
         images: List of PIL Images representing PDF pages.
         command: Instruction text to send alongside the images.
         batch_size: Unused. Maintained for backward compatibility.
+
+    Images are converted to grayscale before sending to reduce bandwidth.
     """
 
     open_ai_key = os.environ.get("OPEN_AI_KEY")
@@ -73,8 +75,10 @@ def send_images_to_openai(images: List[Image.Image], command: str, batch_size: i
     limited_images = images[:20]
     image_parts = []
     for img in limited_images:
+        # Convert each page to grayscale before encoding to save bandwidth
+        gray_img = img.convert("L")
         buffer = io.BytesIO()
-        img.save(buffer, format="PNG")
+        gray_img.save(buffer, format="PNG")
         b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
         image_parts.append(
             {
