@@ -10,4 +10,6 @@ Implement repos containing a server that can be used in railway.app
 
 Set up a webhook to accept the payload from supabase
 
+Set `WEBHOOK_AUTH_TOKEN` to require a matching `Authorization` header
+
 Log all data received to console
