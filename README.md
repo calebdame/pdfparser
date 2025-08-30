@@ -2,7 +2,7 @@
 
 ### High level Goal when done
 
-This repos will create a webhook that will accept a payload from a supabase instance, loading the pdf links it shares, turning them into images, then passing the images in batches to an OPENAI model to determine if the docuemnt meets specific criteria
+This repo creates a webhook that accepts a payload from a Supabase instance, downloads the PDF links it shares, converts each page to an image, and processes the text locally. OpenAI calls are currently disabled; instead, the service logs OCR output and FAISS search results for testing purposes.
 
 ### Lower level beginning
 
@@ -20,3 +20,35 @@ Log all data received to console
 * `OPENAI_MODEL` – optional model override for image labeling. Defaults to
   `gpt-4o-mini`, which offers a lower-cost alternative while providing
   high quality results.
+
+### OCR and FAISS Indexing
+
+PDF pages are now processed locally. The server converts each page to text using
+[Tesseract](https://github.com/tesseract-ocr/tesseract) via `pytesseract` and
+creates embeddings with a small SentenceTransformer model. These embeddings are
+stored in a local [FAISS](https://github.com/facebookresearch/faiss) index so
+queries can retrieve the most relevant text snippets without sending images to
+external APIs.
+
+### System dependencies
+
+`pytesseract` only provides Python bindings; the Tesseract binary must be
+present on the host. On Debian/Ubuntu-based images (including Railway's
+default environment) install it with:
+
+```sh
+apt-get update && apt-get install -y tesseract-ocr
+```
+
+Ensure the `tesseract` command is on the `PATH` so the OCR service can invoke
+it during PDF processing.
+
+### Docker
+
+A `Dockerfile` is included that installs Tesseract and Poppler utilities.
+Build and run the server locally with:
+
+```sh
+docker build -t pdfparser .
+docker run -p 8000:8000 pdfparser
+```

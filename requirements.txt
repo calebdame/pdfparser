@@ -5,3 +5,6 @@ pdf2image
 pillow
 openai
 supabase
+pytesseract
+faiss-cpu
+sentence-transformers
