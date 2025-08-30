@@ -18,13 +18,32 @@ async def root():
 
 
 def _process_document(file_path: str, command: str, document_id: Any) -> None:
-    """Convert the PDF to images and send them to OpenAI."""
+    """Convert the PDF to images, run OCR, build a FAISS index, and log results."""
     from pdf_service import process_pdf
-    from openai_service import send_images_to_openai
+    from ocr_service import ocr_images
+    from faiss_service import build_faiss_index, search_index
 
     images = process_pdf(file_path)
-    if images:
-        send_images_to_openai(images, command=command, document_id=document_id)
+    if not images:
+        return
+
+    texts = ocr_images(images)
+    if not texts:
+        logger.warning("No text extracted during OCR for document %s", document_id)
+        return
+
+    logger.info("First OCR text snippet: %s", texts[0][:200])
+
+    index, stored_texts = build_faiss_index(texts)
+    logger.info(
+        "Built FAISS index for document %s with %d vectors",
+        document_id,
+        index.ntotal,
+    )
+
+    if command:
+        results = search_index(command, index, stored_texts, top_k=3)
+        logger.info("Sample search results for '%s': %s", command, results)
 
 
 @app.post("/webhook")
