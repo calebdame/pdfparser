@@ -65,7 +65,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
             "Queueing document %s for processing", document_id
         )
         background_tasks.add_task(
-            process_document, file_path, document_id, process_only
+            process_document, file_path, document_id
         )
         return {"status": "queued"}
 
