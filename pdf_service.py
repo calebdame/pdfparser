@@ -12,7 +12,8 @@ def process_pdf(file_path: str) -> List["Image.Image"]:
     """Download a PDF, convert to images, and log the page count.
 
     Args:
-        file_path: Path of the PDF within the storage bucket.
+        file_path: Either an absolute URL to the PDF or the path within the
+            storage bucket (combined with ``ENV_URL``).
 
     Returns:
         List of PIL Image objects representing each PDF page.
@@ -22,11 +23,16 @@ def process_pdf(file_path: str) -> List["Image.Image"]:
     from PIL import Image
 
     base_url = os.environ.get("ENV_URL", "").rstrip("/")
-    if not base_url:
-        logger.warning("ENV_URL not configured; cannot download PDF")
+    if file_path.startswith(("http://", "https://")):
+        pdf_url = file_path
+    elif base_url:
+        pdf_url = f"{base_url}/{file_path}"
+    else:
+        logger.warning(
+            "ENV_URL not configured and file_path is not an absolute URL; cannot download PDF"
+        )
         return []
 
-    pdf_url = f"{base_url}/{file_path}"
     logger.info("Downloading PDF from %s", pdf_url)
 
     try:
