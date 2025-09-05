@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 
 from document_processor import process_document
+from faiss_service import ensure_model
 
 
 logging.basicConfig(level=logging.INFO)
@@ -77,6 +78,12 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
 
     logger.warning("Missing file_path; nothing queued")
     return {"status": "ignored"}
+
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    """Pre-download the transformer model to the mounted volume."""
+    ensure_model()
 
 
 if __name__ == "__main__":

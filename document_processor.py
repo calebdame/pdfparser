@@ -1,4 +1,5 @@
 import os
+import gc
 import logging
 from typing import Any, Dict, List, Tuple
 
@@ -29,47 +30,57 @@ def process_document(file_path: str, command: str, document_id: Any, process_onl
         command,
     )
 
-    images = process_pdf(file_path)
-    if not images:
-        logger.warning("PDF processing produced no images for document %s", document_id)
-        return
-    logger.info("Converted document %s into %d images", document_id, len(images))
+    try:
+        images = process_pdf(file_path)
+        if not images:
+            logger.warning("PDF processing produced no images for document %s", document_id)
+            return
+        logger.info("Converted document %s into %d images", document_id, len(images))
 
-    texts = ocr_images(images)
-    if not texts:
-        logger.warning("No text extracted during OCR for document %s", document_id)
-        return
-    logger.info("Extracted OCR text for %d pages", len(texts))
-    logger.info("First OCR text snippet: %s", texts[0][:200])
+        texts = ocr_images(images)
+        if not texts:
+            logger.warning("No text extracted during OCR for document %s", document_id)
+            return
+        logger.info("Extracted OCR text for %d pages", len(texts))
+        logger.info("First OCR text snippet: %s", texts[0][:200])
 
-    chunk_size = int(os.environ.get("CHUNK_SIZE", 500))
-    chunk_overlap = int(os.environ.get("CHUNK_OVERLAP", 100))
-    logger.info(
-        "Chunking texts with chunk_size=%d and chunk_overlap=%d",
-        chunk_size,
-        chunk_overlap,
-    )
-    chunked_texts, metadatas = chunk_texts(texts, chunk_size, chunk_overlap)
-    logger.info("Generated %d chunks", len(chunked_texts))
-
-    index, stored_texts, stored_metadatas = build_faiss_index(chunked_texts, metadatas)
-    logger.info(
-        "Built FAISS index for document %s with %d vectors",
-        document_id,
-        index.ntotal,
-    )
-
-    if command and not process_only:
+        chunk_size = int(os.environ.get("CHUNK_SIZE", 500))
+        chunk_overlap = int(os.environ.get("CHUNK_OVERLAP", 100))
         logger.info(
-            "Executing search for command '%s' on document %s",
-            command,
+            "Chunking texts with chunk_size=%d and chunk_overlap=%d",
+            chunk_size,
+            chunk_overlap,
+        )
+        chunked_texts, metadatas = chunk_texts(texts, chunk_size, chunk_overlap)
+        logger.info("Generated %d chunks", len(chunked_texts))
+
+        index, stored_texts, stored_metadatas = build_faiss_index(chunked_texts, metadatas)
+        logger.info(
+            "Built FAISS index for document %s with %d vectors",
             document_id,
+            index.ntotal,
         )
-        results = search_index(command, index, stored_texts, stored_metadatas, top_k=3)
-        logger.info("Sample search results for '%s': %s", command, results)
-    else:
-        logger.info(
-            "Skipping search; command='%s', process_only=%s",
-            command,
-            process_only,
-        )
+
+        if command and not process_only:
+            logger.info(
+                "Executing search for command '%s' on document %s",
+                command,
+                document_id,
+            )
+            results = search_index(command, index, stored_texts, stored_metadatas, top_k=3)
+            logger.info("Sample search results for '%s': %s", command, results)
+        else:
+            logger.info(
+                "Skipping search; command='%s', process_only=%s",
+                command,
+                process_only,
+            )
+    finally:
+        gc.collect()
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
