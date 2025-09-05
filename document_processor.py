@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Tuple
 
 from pdf_service import process_pdf
 from ocr_service import ocr_images
-from faiss_service import build_faiss_index, search_index
+from faiss_service import build_faiss_index
+from question_answer_service import ask_questions_for_categories
 
 logger = logging.getLogger("pdfparser.document_processor")
 
@@ -65,6 +66,12 @@ def process_document(file_path: str, document_id: Any) -> None:
             "Built FAISS index for document %s with %d vectors",
             document_id,
             index.ntotal,
+        )
+
+        qa_csv = os.environ.get("QA_CSV_PATH", "hoana_questions.csv")
+        qa_top_k = int(os.environ.get("QA_TOP_K", 5))
+        ask_questions_for_categories(
+            qa_csv, index, stored_texts, stored_metadatas, top_k=qa_top_k
         )
 
     finally:
