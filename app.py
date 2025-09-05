@@ -21,7 +21,7 @@ def _process_document(file_path: str, command: str, document_id: Any) -> None:
     """Convert the PDF to images, run OCR, build a FAISS index, and log results."""
     from pdf_service import process_pdf
     from ocr_service import ocr_images
-    from faiss_service import build_faiss_index, search_index
+    from faiss_service import build_faiss_index  # , search_index
 
     images = process_pdf(file_path)
     if not images:
@@ -34,17 +34,30 @@ def _process_document(file_path: str, command: str, document_id: Any) -> None:
 
     logger.info("First OCR text snippet: %s", texts[0][:200])
 
-    index, stored_texts = build_faiss_index(texts)
+
+    chunk_size = int(os.environ.get("CHUNK_SIZE", 500))
+    chunk_overlap = int(os.environ.get("CHUNK_OVERLAP", 100))
+
+    step = max(1, chunk_size - chunk_overlap)
+    chunked_texts = []
+    metadatas = []
+    for page_num, text in enumerate(texts, start=1):
+        for chunk_idx, offset in enumerate(range(0, len(text), step), start=1):
+            chunk = text[offset : offset + chunk_size]
+            chunked_texts.append(chunk)
+            metadatas.append({"page": page_num, "chunk": chunk_idx})
+
+    index, stored_texts, stored_metadatas = build_faiss_index(chunked_texts, metadatas)
+
     logger.info(
         "Built FAISS index for document %s with %d vectors",
         document_id,
         index.ntotal,
     )
 
-    if command:
-        results = search_index(command, index, stored_texts, top_k=3)
-        logger.info("Sample search results for '%s': %s", command, results)
-
+    # if command:
+    #     results = search_index(command, index, stored_texts, stored_metadatas, top_k=3)
+    #     logger.info("Sample search results for '%s': %s", command, results)
 
 @app.post("/webhook")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
@@ -85,12 +98,15 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         logger.info("Skipping document %s with status '%s'", document_id, status)
         return {"status": "skipped"}
 
-    command = os.environ.get("COMMAND", "").strip()
-    if file_path and command:
-        background_tasks.add_task(_process_document, file_path, command, document_id)
+    # command = os.environ.get("COMMAND", "").strip()
+    if file_path:
+        background_tasks.add_task(_process_document, file_path, "", document_id)
         return {"status": "queued"}
+    # if file_path and command:
+    #     background_tasks.add_task(_process_document, file_path, command, document_id)
+    #     return {"status": "queued"}
 
-    logger.warning("Missing file_path or COMMAND; nothing queued")
+    logger.warning("Missing file_path; nothing queued")
     return {"status": "ignored"}
 
 

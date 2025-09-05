@@ -21,13 +21,20 @@ Log all data received to console
   `gpt-4o-mini`, which offers a lower-cost alternative while providing
   high quality results.
 
+`record.file_path` in webhook payloads may be either a relative path or a full
+URL. If it starts with `http://` or `https://`, the service downloads the PDF
+from that URL directly; otherwise it is appended to the `ENV_URL` prefix.
+
 ### OCR and FAISS Indexing
 
 PDF pages are now processed locally. The server converts each page to text using
 [Tesseract](https://github.com/tesseract-ocr/tesseract) via `pytesseract` and
-creates embeddings with a small SentenceTransformer model. These embeddings are
-stored in a local [FAISS](https://github.com/facebookresearch/faiss) index so
-queries can retrieve the most relevant text snippets without sending images to
+chunks the OCR output into segments (default 500 characters with 100 characters
+of overlap; override with `CHUNK_SIZE` and `CHUNK_OVERLAP` environment
+variables). These chunks are embedded with a small SentenceTransformer model
+and stored in a local [FAISS](https://github.com/facebookresearch/faiss) index
+alongside a metadata dictionary for each block (page and chunk numbers) so
+queries can retrieve the most relevant snippets without sending images to 
 external APIs.
 
 ### System dependencies
