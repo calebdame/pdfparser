@@ -4,6 +4,8 @@ from typing import Any
 
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 
+from document_processor import process_document
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("pdfparser")
@@ -16,48 +18,6 @@ async def root():
     logger.info("Root endpoint called")
     return {"status": "running"}
 
-
-def _process_document(file_path: str, command: str, document_id: Any) -> None:
-    """Convert the PDF to images, run OCR, build a FAISS index, and log results."""
-    from pdf_service import process_pdf
-    from ocr_service import ocr_images
-    from faiss_service import build_faiss_index  # , search_index
-
-    images = process_pdf(file_path)
-    if not images:
-        return
-
-    texts = ocr_images(images)
-    if not texts:
-        logger.warning("No text extracted during OCR for document %s", document_id)
-        return
-
-    logger.info("First OCR text snippet: %s", texts[0][:200])
-
-
-    chunk_size = int(os.environ.get("CHUNK_SIZE", 500))
-    chunk_overlap = int(os.environ.get("CHUNK_OVERLAP", 100))
-
-    step = max(1, chunk_size - chunk_overlap)
-    chunked_texts = []
-    metadatas = []
-    for page_num, text in enumerate(texts, start=1):
-        for chunk_idx, offset in enumerate(range(0, len(text), step), start=1):
-            chunk = text[offset : offset + chunk_size]
-            chunked_texts.append(chunk)
-            metadatas.append({"page": page_num, "chunk": chunk_idx})
-
-    index, stored_texts, stored_metadatas = build_faiss_index(chunked_texts, metadatas)
-
-    logger.info(
-        "Built FAISS index for document %s with %d vectors",
-        document_id,
-        index.ntotal,
-    )
-
-    # if command:
-    #     results = search_index(command, index, stored_texts, stored_metadatas, top_k=3)
-    #     logger.info("Sample search results for '%s': %s", command, results)
 
 @app.post("/webhook")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
@@ -94,17 +54,26 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
     document_id: Any = record.get("id")
     status = str(record.get("status", "")).lower()
 
+    process_only = False
+    if isinstance(payload, dict) and ("process_only" in payload or "process_only" in record):
+        process_only = True
+    logger.info("Parsed process_only=%s", process_only)
+
     if status in {"reviewed", "processed"} or record.get("mock_data_processed"):
         logger.info("Skipping document %s with status '%s'", document_id, status)
         return {"status": "skipped"}
 
-    # command = os.environ.get("COMMAND", "").strip()
+    command = os.environ.get("COMMAND", "").strip()
+    logger.info("Command from environment: '%s'", command)
+
     if file_path:
-        background_tasks.add_task(_process_document, file_path, "", document_id)
+        logger.info(
+            "Queueing document %s for processing", document_id
+        )
+        background_tasks.add_task(
+            process_document, file_path, command, document_id, process_only
+        )
         return {"status": "queued"}
-    # if file_path and command:
-    #     background_tasks.add_task(_process_document, file_path, command, document_id)
-    #     return {"status": "queued"}
 
     logger.warning("Missing file_path; nothing queued")
     return {"status": "ignored"}
