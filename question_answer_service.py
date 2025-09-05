@@ -24,7 +24,7 @@ def load_questions(csv_path: str) -> Dict[str, List[Dict[str, Any]]]:
             answers = [a for a in answers if a]
             groups[row["Tag Category"]].append(
                 {
-                    "tag_term": row["Tag Term"],
+                    "tag_term": row["Original Tags"],
                     "question": row["Question"],
                     "answers": answers,
                 }
