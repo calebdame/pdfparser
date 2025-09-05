@@ -22,12 +22,10 @@ def chunk_texts(texts: List[str], chunk_size: int, chunk_overlap: int) -> Tuple[
     return chunked_texts, metadatas
 
 
-def process_document(file_path: str, command: str, document_id: Any, process_only: bool = False) -> None:
+def process_document(file_path: str, document_id: Any) -> None:
     logger.info(
         "Begin processing document %s; process_only=%s, command='%s'",
-        document_id,
-        process_only,
-        command,
+        document_id
     )
 
     try:
@@ -69,19 +67,10 @@ def process_document(file_path: str, command: str, document_id: Any, process_onl
             index.ntotal,
         )
 
-        if command and not process_only:
-            logger.info(
-                "Executing search for command '%s' on document %s",
-                command,
-                document_id,
-            )
-            results = search_index(command, index, stored_texts, stored_metadatas, top_k=3)
-            logger.info("Sample search results for '%s': %s", command, results)
-        else:
-            logger.info(
-                "Skipping search; command='%s', process_only=%s",
-                command,
-                process_only,
-            )
+        logger.info(
+            "Executing search for command '%s' on document %s",
+            document_id,
+        )
+
     finally:
         gc.collect()
