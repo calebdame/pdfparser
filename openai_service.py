@@ -112,7 +112,8 @@ def answer_questions_with_context(
         "if one or more wrongs characters create nonsense words.\n\n"
         "For each question, it is extremely important to reply with a correctly formatted "
         "JSON object mapping the 'tag_term' to the "
-        "best answer. If options are given, respond with one of them exactly.\n\n"
+        "best answer. If options are given, respond with one of them exactly.\n"
+        "If a question has no options, provide a concise answer under 300 characters.\n\n"
         f"Context:\n{context_text}\n\nQuestions:\n{questions_text}\n\n"
         "Return JSON only - Nothing that will cause parsing errors.  Also avoid exotic "
         "symbols, characters, and emojis that would make standard JSON and text encoding "
@@ -131,6 +132,12 @@ def answer_questions_with_context(
         except json.JSONDecodeError:
             logger.exception("Failed to parse OpenAI response as JSON")
             parsed = {}
+        for q in questions:
+            if not q.get("answers"):
+                tag = q.get("tag_term")
+                ans = parsed.get(tag)
+                if isinstance(ans, str) and len(ans) > 300:
+                    parsed[tag] = ans[:300]
         return raw_text, parsed
     except Exception as exc:
         logger.exception("OpenAI API call failed: %s", exc)

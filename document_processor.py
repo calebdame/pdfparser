@@ -24,10 +24,7 @@ def chunk_texts(texts: List[str], chunk_size: int, chunk_overlap: int) -> Tuple[
 
 
 def process_document(file_path: str, document_id: Any) -> None:
-    logger.info(
-        "Begin processing document %s; process_only=%s, command='%s'",
-        document_id
-    )
+    logger.info("Begin processing document %s", document_id)
 
     try:
         images = process_pdf(file_path)
