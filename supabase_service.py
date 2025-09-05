@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from supabase import Client
@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("pdfparser.supabase_service")
 
 
-def get_client() -> "Client" | None:
+def get_client() -> Optional["Client"]:
     from supabase import create_client
 
     url = os.environ.get("SUPABASE_URL")
