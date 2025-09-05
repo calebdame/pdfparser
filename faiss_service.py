@@ -3,9 +3,9 @@ import os
 import gc
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from multiprocessing import get_context
 
 import faiss
-from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger("pdfparser.faiss_service")
 
@@ -21,24 +21,28 @@ def _model_dir(model_name: str) -> Path:
 
 
 def ensure_model(model_name: str = MODEL_NAME) -> Path:
-    """Ensure the SentenceTransformer model is stored on disk and return its path."""
+    """Ensure the model files are stored on disk and return the path."""
     path = _model_dir(model_name)
     config_file = path / "config.json"
     if not config_file.exists():
         logger.info("Caching model '%s' to %s", model_name, path)
-        model = SentenceTransformer(model_name)
-        path.mkdir(parents=True, exist_ok=True)
-        model.save(str(path))
-        del model
-        gc.collect()
-        try:  # Free any GPU memory if torch is available
-            import torch
+        from huggingface_hub import snapshot_download
 
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception:
-            pass
+        snapshot_download(
+            repo_id=model_name,
+            local_dir=path,
+            local_dir_use_symlinks=False,
+        )
     return path
+
+
+def _encode_worker(texts: List[str], model_path: Path, queue) -> None:
+    """Encode texts in a separate process and return embeddings via queue."""
+    from sentence_transformers import SentenceTransformer
+
+    model = SentenceTransformer(str(model_path))
+    embeddings = model.encode(texts, convert_to_numpy=True)
+    queue.put(embeddings)
 
 
 def build_faiss_index(
@@ -58,20 +62,20 @@ def build_faiss_index(
         index and reference the original text and associated metadata.
     """
     model_path = ensure_model(model_name)
-    model = SentenceTransformer(str(model_path))
-    embeddings = model.encode(texts, convert_to_numpy=True)
-    del model
-    gc.collect()
-    try:
-        import torch
 
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except Exception:
-        pass
+    ctx = get_context("spawn")
+    queue = ctx.Queue()
+    process = ctx.Process(target=_encode_worker, args=(texts, model_path, queue))
+    process.start()
+    embeddings = queue.get()
+    process.join()
+    queue.close()
+    process.close()
     dim = embeddings.shape[1]
     index = faiss.IndexFlatL2(dim)
     index.add(embeddings)
+    del embeddings
+    gc.collect()
     logger.info("Built FAISS index with %d vectors", index.ntotal)
     return index, texts, metadatas
 
@@ -86,18 +90,18 @@ def search_index(
 ) -> List[Tuple[str, Dict[str, Any]]]:
     """Search a FAISS index and return the top matches and metadata."""
     model_path = ensure_model(model_name)
-    model = SentenceTransformer(str(model_path))
-    query_vec = model.encode([query], convert_to_numpy=True)
-    del model
-    gc.collect()
-    try:
-        import torch
 
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except Exception:
-        pass
+    ctx = get_context("spawn")
+    queue = ctx.Queue()
+    process = ctx.Process(target=_encode_worker, args=([query], model_path, queue))
+    process.start()
+    query_vec = queue.get()
+    process.join()
+    queue.close()
+    process.close()
     _distances, indices = index.search(query_vec, top_k)
+    del query_vec
+    gc.collect()
     results = [(texts[i], metadatas[i]) for i in indices[0]]
 
     return results

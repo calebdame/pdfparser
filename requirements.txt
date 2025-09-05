@@ -6,3 +6,4 @@ pillow
 pytesseract
 faiss-cpu
 sentence-transformers
+huggingface-hub

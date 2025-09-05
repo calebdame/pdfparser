@@ -17,8 +17,11 @@ def ocr_images(images: List[Image.Image]) -> List[str]:
     texts: List[str] = []
     for page_num, image in enumerate(images, start=1):
         try:
-            texts.append(pytesseract.image_to_string(image))
+            text = pytesseract.image_to_string(image)
         except Exception as exc:  # pragma: no cover - logging only
             logger.exception("OCR failed on page %d: %s", page_num, exc)
-            texts.append("")
+            text = ""
+        finally:
+            image.close()
+        texts.append(text)
     return texts
