@@ -106,11 +106,17 @@ def answer_questions_with_context(
     questions_text = "\n".join(question_lines)
 
     prompt = (
-        "You are an assistant answering HOA questions based on provided context. "
-        "For each question, reply with a JSON object mapping the 'tag_term' to the "
+        "You are an assistant answering HOA questions based on provided context from " 
+        "documents scanned with OCR. Since it is parsed from OCR from, there may be "
+        "typos, so use logic and strategy to understand the potential meaning of terms "
+        "if one or more wrongs characters create nonsense words.\n\n"
+        "For each question, it is extremely important to reply with a correctly formatted "
+        "JSON object mapping the 'tag_term' to the "
         "best answer. If options are given, respond with one of them exactly.\n\n"
         f"Context:\n{context_text}\n\nQuestions:\n{questions_text}\n\n"
-        "Return JSON only."
+        "Return JSON only - Nothing that will cause parsing errors.  Also avoid exotic "
+        "symbols, characters, and emojis that would make standard JSON and text encoding "
+        "errors.  Must be JSON parsable by Python's json package."
     )
 
     try:
