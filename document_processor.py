@@ -67,10 +67,5 @@ def process_document(file_path: str, document_id: Any) -> None:
             index.ntotal,
         )
 
-        logger.info(
-            "Executing search for command '%s' on document %s",
-            document_id,
-        )
-
     finally:
         gc.collect()
