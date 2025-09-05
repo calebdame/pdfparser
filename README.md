@@ -34,7 +34,7 @@ of overlap; override with `CHUNK_SIZE` and `CHUNK_OVERLAP` environment
 variables). These chunks are embedded with a small SentenceTransformer model
 and stored in a local [FAISS](https://github.com/facebookresearch/faiss) index
 alongside a metadata dictionary for each block (page and chunk numbers) so
-queries can retrieve the most relevant snippets without sending images to
+queries can retrieve the most relevant snippets without sending images to 
 external APIs.
 
 ### System dependencies

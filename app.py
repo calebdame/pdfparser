@@ -34,6 +34,7 @@ def _process_document(file_path: str, command: str, document_id: Any) -> None:
 
     logger.info("First OCR text snippet: %s", texts[0][:200])
 
+
     chunk_size = int(os.environ.get("CHUNK_SIZE", 500))
     chunk_overlap = int(os.environ.get("CHUNK_OVERLAP", 100))
 
@@ -47,6 +48,7 @@ def _process_document(file_path: str, command: str, document_id: Any) -> None:
             metadatas.append({"page": page_num, "chunk": chunk_idx})
 
     index, stored_texts, stored_metadatas = build_faiss_index(chunked_texts, metadatas)
+
     logger.info(
         "Built FAISS index for document %s with %d vectors",
         document_id,
@@ -56,7 +58,6 @@ def _process_document(file_path: str, command: str, document_id: Any) -> None:
     # if command:
     #     results = search_index(command, index, stored_texts, stored_metadatas, top_k=3)
     #     logger.info("Sample search results for '%s': %s", command, results)
-
 
 @app.post("/webhook")
 async def webhook(request: Request, background_tasks: BackgroundTasks):

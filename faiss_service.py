@@ -45,4 +45,5 @@ def search_index(
     query_vec = model.encode([query], convert_to_numpy=True)
     _distances, indices = index.search(query_vec, top_k)
     results = [(texts[i], metadatas[i]) for i in indices[0]]
+
     return results
