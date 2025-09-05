@@ -33,13 +33,21 @@ def process_document(file_path: str, command: str, document_id: Any, process_onl
     try:
         images = process_pdf(file_path)
         if not images:
-            logger.warning("PDF processing produced no images for document %s", document_id)
+            logger.warning(
+                "PDF processing produced no images for document %s", document_id
+            )
             return
-        logger.info("Converted document %s into %d images", document_id, len(images))
+        logger.info(
+            "Converted document %s into %d images", document_id, len(images)
+        )
 
         texts = ocr_images(images)
+        del images
+        gc.collect()
         if not texts:
-            logger.warning("No text extracted during OCR for document %s", document_id)
+            logger.warning(
+                "No text extracted during OCR for document %s", document_id
+            )
             return
         logger.info("Extracted OCR text for %d pages", len(texts))
         logger.info("First OCR text snippet: %s", texts[0][:200])
@@ -77,10 +85,3 @@ def process_document(file_path: str, command: str, document_id: Any, process_onl
             )
     finally:
         gc.collect()
-        try:
-            import torch
-
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception:
-            pass
