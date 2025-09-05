@@ -54,24 +54,18 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
     document_id: Any = record.get("id")
     status = str(record.get("status", "")).lower()
 
-    process_only = False
-    if isinstance(payload, dict) and ("process_only" in payload or "process_only" in record):
-        process_only = True
     logger.info("Parsed process_only=%s", process_only)
 
     if status in {"reviewed", "processed"} or record.get("mock_data_processed"):
         logger.info("Skipping document %s with status '%s'", document_id, status)
         return {"status": "skipped"}
 
-    command = os.environ.get("COMMAND", "").strip()
-    logger.info("Command from environment: '%s'", command)
-
     if file_path:
         logger.info(
             "Queueing document %s for processing", document_id
         )
         background_tasks.add_task(
-            process_document, file_path, command, document_id, process_only
+            process_document, file_path, document_id, process_only
         )
         return {"status": "queued"}
 
