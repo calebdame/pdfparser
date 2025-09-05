@@ -44,7 +44,10 @@ def ask_questions_for_categories(
     for category, questions in categories.items():
         logger.info("Processing category '%s'", category)
         results = search_index(category, index, texts, metadatas, top_k=top_k)
-        context = [text for text, _meta in results]
+        context = [
+            f"{text} (page {_meta.get('page')})" if _meta.get("page") else text
+            for text, _meta in results
+        ]
         raw, parsed = answer_questions_with_context(context, questions)
         logger.info("Raw response: %s", raw)
         logger.info("Parsed answers: %s", parsed)
