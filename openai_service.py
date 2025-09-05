@@ -132,12 +132,6 @@ def answer_questions_with_context(
         except json.JSONDecodeError:
             logger.exception("Failed to parse OpenAI response as JSON")
             parsed = {}
-        for q in questions:
-            if not q.get("answers"):
-                tag = q.get("tag_term")
-                ans = parsed.get(tag)
-                if isinstance(ans, str) and len(ans) > 300:
-                    parsed[tag] = ans[:300]
         return raw_text, parsed
     except Exception as exc:
         logger.exception("OpenAI API call failed: %s", exc)
