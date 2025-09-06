@@ -54,8 +54,6 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
     document_id: Any = record.get("id")
     status = str(record.get("status", "")).lower()
 
-    logger.info("Parsed process_only=%s", process_only)
-
     if status in {"reviewed", "processed"} or record.get("mock_data_processed"):
         logger.info("Skipping document %s with status '%s'", document_id, status)
         return {"status": "skipped"}
