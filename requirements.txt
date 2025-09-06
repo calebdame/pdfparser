@@ -7,3 +7,4 @@ pytesseract
 faiss-cpu
 sentence-transformers
 huggingface-hub
+openai
