@@ -34,13 +34,14 @@ from that URL directly; otherwise it is appended to the `ENV_URL` prefix.
 
 PDF pages are now processed locally. The server converts each page to text using
 [Tesseract](https://github.com/tesseract-ocr/tesseract) via `pytesseract` and
-chunks the OCR output into segments (default 500 characters with 100 characters
-of overlap; override with `CHUNK_SIZE` and `CHUNK_OVERLAP` environment
-variables). These chunks are embedded with a small SentenceTransformer model
-and stored in a local [FAISS](https://github.com/facebookresearch/faiss) index
-alongside a metadata dictionary for each block (page and chunk numbers) so
-queries can retrieve the most relevant snippets without sending images to 
-external APIs.
+splits the OCR output into semantically meaningful chunks. Sentences are
+assembled into blocks of up to ``CHUNK_SIZE`` tokens (default ``500``) with
+``CHUNK_OVERLAP`` tokens of overlap (default ``100``). Each chunk is embedded
+with a small SentenceTransformer model and stored in a local
+[FAISS](https://github.com/facebookresearch/faiss) index using cosine
+similarity. Metadata now records the page number and sentence span for every
+chunk so queries can retrieve the most relevant snippets without sending images
+to external APIs.
 
 ### System dependencies
 

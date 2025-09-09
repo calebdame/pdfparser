@@ -1,6 +1,7 @@
 import logging
 import os
 import gc
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 from multiprocessing import get_context
@@ -36,6 +37,14 @@ def ensure_model(model_name: str = MODEL_NAME) -> Path:
     return path
 
 
+def preprocess_text(text: str) -> str:
+    """Normalize text before encoding."""
+    text = text.lower().strip()
+    # Remove control characters
+    text = re.sub(r"[\x00-\x1f\x7f]", "", text)
+    return text
+
+
 def _encode_worker(texts: List[str], model_path: Path, queue) -> None:
     """Encode texts in a separate process and return embeddings via queue."""
     from sentence_transformers import SentenceTransformer
@@ -63,6 +72,8 @@ def build_faiss_index(
     """
     model_path = ensure_model(model_name)
 
+    texts = [preprocess_text(t) for t in texts]
+
     ctx = get_context("spawn")
     queue = ctx.Queue()
     process = ctx.Process(target=_encode_worker, args=(texts, model_path, queue))
@@ -71,12 +82,14 @@ def build_faiss_index(
     process.join()
     queue.close()
     process.close()
+
+    faiss.normalize_L2(embeddings)
     dim = embeddings.shape[1]
-    index = faiss.IndexFlatL2(dim)
+    index = faiss.IndexFlatIP(dim)
     index.add(embeddings)
     del embeddings
     gc.collect()
-    logger.info("Built FAISS index with %d vectors", index.ntotal)
+    logger.info("Built FAISS index (cosine) with %d vectors", index.ntotal)
     return index, texts, metadatas
 
 
@@ -91,6 +104,8 @@ def search_index(
     """Search a FAISS index and return the top matches and metadata."""
     model_path = ensure_model(model_name)
 
+    query = preprocess_text(query)
+
     ctx = get_context("spawn")
     queue = ctx.Queue()
     process = ctx.Process(target=_encode_worker, args=([query], model_path, queue))
@@ -99,6 +114,7 @@ def search_index(
     process.join()
     queue.close()
     process.close()
+    faiss.normalize_L2(query_vec)
     _distances, indices = index.search(query_vec, top_k)
     del query_vec
     gc.collect()
