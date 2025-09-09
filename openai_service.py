@@ -3,6 +3,7 @@ import logging
 import base64
 import io
 import json
+import re
 from typing import List, Any, TYPE_CHECKING
 
 from supabase_service import update_document_status
@@ -11,6 +12,15 @@ if TYPE_CHECKING:
     from PIL import Image
 
 logger = logging.getLogger("pdfparser.openai_service")
+
+
+def _strip_markdown_code_fence(text: str) -> str:
+    """Remove surrounding Markdown code fences from ``text`` if present."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z0-9]*\n", "", text)
+        text = re.sub(r"\n```$", "", text)
+    return text
 
 
 def send_images_to_openai(
@@ -105,34 +115,62 @@ def answer_questions_with_context(
         )
     questions_text = "\n".join(question_lines)
 
-    prompt = (
-        "You are an assistant answering HOA questions based on provided context from " 
+    base_prompt = (
+        "You are an assistant answering HOA questions based on provided context from "
         "documents scanned with OCR. Since it is parsed from OCR from, there may be "
         "typos, so use logic and strategy to understand the potential meaning of terms "
         "if one or more wrongs characters create nonsense words.\n\n"
         "For each question, it is extremely important to reply with a correctly formatted "
         "JSON object mapping the 'tag_term' to the "
         "best answer. If options are given, respond with one of them exactly.\n"
-        "If a question has no options, provide a concise answer under 300 characters.\n\n"
+        "If a question has no options, provide a concise answer under 300 characters.\n"
+        "If an answer cannot be determined from the context, respond with null for that tag_term.\n\n"
         f"Context:\n{context_text}\n\nQuestions:\n{questions_text}\n\n"
         "Return JSON only - Nothing that will cause parsing errors.  Also avoid exotic "
         "symbols, characters, and emojis that would make standard JSON and text encoding "
         "errors.  Must be JSON parsable by Python's json package."
     )
 
-    try:
-        response = client.responses.create(
-            model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-            input=[{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
-        )
-        raw_text = response.output_text
-        logger.info("OpenAI raw response: %s", raw_text)
+    parser_code = (
+        "import json\n"
+        "import re\n"
+        "def parse_response(text):\n"
+        "    text = text.strip()\n"
+        "    if text.startswith('```'):\n"
+        "        text = re.sub(r'^```[a-zA-Z0-9]*\\n', '', text)\n"
+        "        text = re.sub(r'\\n```$', '', text)\n"
+        "    return json.loads(text)\n"
+    )
+
+    n_retry = int(os.environ.get("N_RETRY", "1"))
+    raw_text, parsed = "", {}
+    for attempt in range(n_retry + 1):
+        prompt = base_prompt
+        if attempt > 0:
+            prompt += (
+                "\n\nThe previous response could not be parsed. "
+                "Ensure the next response is valid JSON. The following Python code will be "
+                "used to parse your answer:\n" + f"```python\n{parser_code}```"
+            )
         try:
-            parsed = json.loads(raw_text)
-        except json.JSONDecodeError:
-            logger.exception("Failed to parse OpenAI response as JSON")
-            parsed = {}
-        return raw_text, parsed
-    except Exception as exc:
-        logger.exception("OpenAI API call failed: %s", exc)
-        return "", {}
+            response = client.responses.create(
+                model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+                input=[{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+            )
+            raw_text = response.output_text
+            logger.info("OpenAI raw response: %s", raw_text)
+            cleaned = _strip_markdown_code_fence(raw_text)
+            try:
+                parsed = json.loads(cleaned)
+            except json.JSONDecodeError:
+                logger.exception("Failed to parse OpenAI response as JSON")
+                parsed = {}
+            missing = [q["tag_term"] for q in questions if q["tag_term"] not in parsed]
+            if parsed and not missing:
+                break
+        except Exception as exc:
+            logger.exception("OpenAI API call failed: %s", exc)
+            break
+    for q in questions:
+        parsed.setdefault(q["tag_term"], None)
+    return raw_text, parsed
