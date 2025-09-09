@@ -20,6 +20,8 @@ Log all data received to console
 * `OPENAI_MODEL` – optional model override for image labeling. Defaults to
   `gpt-4o-mini`, which offers a lower-cost alternative while providing
   high quality results.
+* `N_RETRY` – number of times to retry question answering if the response
+  cannot be parsed. Defaults to `1`.
 * `API_VOLUME_DIR` – optional path where the SentenceTransformer model is
   cached. Defaults to `/data/api`. Existing cached models are reused, so the
   download happens only if the model files are absent from that directory.
