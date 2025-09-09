@@ -1,6 +1,7 @@
 import os
 import gc
 import logging
+import re
 from typing import Any, Dict, List, Tuple
 
 from pdf_service import process_pdf
@@ -11,15 +12,47 @@ from question_answer_service import ask_questions_for_categories
 logger = logging.getLogger("pdfparser.document_processor")
 
 
-def chunk_texts(texts: List[str], chunk_size: int, chunk_overlap: int) -> Tuple[List[str], List[Dict[str, int]]]:
-    step = max(1, chunk_size - chunk_overlap)
+def chunk_texts(
+    texts: List[str], chunk_size: int, chunk_overlap: int
+) -> Tuple[List[str], List[Dict[str, int]]]:
+    """Split texts into sentence-based chunks using token counts.
+
+    Each page is segmented into sentences, then reassembled into chunks that
+    do not exceed ``chunk_size`` tokens. Adjacent chunks share up to
+    ``chunk_overlap`` tokens for context continuity. Metadata tracks the page
+    number and sentence range for each chunk.
+    """
+
     chunked_texts: List[str] = []
     metadatas: List[Dict[str, int]] = []
+
     for page_num, text in enumerate(texts, start=1):
-        for chunk_idx, offset in enumerate(range(0, len(text), step), start=1):
-            chunk = text[offset : offset + chunk_size]
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+        token_counts = [len(s.split()) for s in sentences]
+        start = 0
+        while start < len(sentences):
+            token_total = 0
+            end = start
+            while end < len(sentences) and token_total + token_counts[end] <= chunk_size:
+                token_total += token_counts[end]
+                end += 1
+
+            chunk = " ".join(sentences[start:end])
             chunked_texts.append(chunk)
-            metadatas.append({"page": page_num, "chunk": chunk_idx})
+            metadatas.append(
+                {"page": page_num, "start_sentence": start + 1, "end_sentence": end}
+            )
+
+            if end >= len(sentences):
+                break
+
+            overlap_tokens = 0
+            overlap_start = end - 1
+            while overlap_start >= start and overlap_tokens < chunk_overlap:
+                overlap_tokens += token_counts[overlap_start]
+                overlap_start -= 1
+            start = overlap_start + 1
+
     return chunked_texts, metadatas
 
 

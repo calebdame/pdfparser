@@ -43,7 +43,15 @@ def ask_questions_for_categories(
     categories = load_questions(csv_path)
     for category, questions in categories.items():
         logger.info("Processing category '%s'", category)
-        results = search_index(category, index, texts, metadatas, top_k=top_k)
+        parts: List[str] = [category]
+        seen = set(parts)
+        for q in questions:
+            for part in (q.get("question"), q.get("tag_term")):
+                if part and part not in seen:
+                    parts.append(part)
+                    seen.add(part)
+        query_text = " ".join(parts)
+        results = search_index(query_text, index, texts, metadatas, top_k=top_k)
         context = [
             f"{text} (page {_meta.get('page')})" if _meta.get("page") else text
             for text, _meta in results
