@@ -1,8 +1,20 @@
 import os
 import gc
 import logging
-import re
 from typing import Any, Dict, List, Tuple
+
+import nltk
+from nltk.tokenize import word_tokenize
+
+NLTK_DATA_DIR = os.environ.get(
+    "NLTK_DATA", os.path.join(os.path.dirname(__file__), "nltk_data")
+)
+os.makedirs(NLTK_DATA_DIR, exist_ok=True)
+nltk.data.path.append(NLTK_DATA_DIR)
+try:
+    nltk.data.find("tokenizers/punkt")
+except LookupError:
+    nltk.download("punkt", download_dir=NLTK_DATA_DIR, quiet=True)
 
 from pdf_service import process_pdf
 from ocr_service import ocr_images
@@ -11,50 +23,28 @@ from question_answer_service import ask_questions_for_categories
 
 logger = logging.getLogger("pdfparser.document_processor")
 
+def chunk_texts(texts: List[str], chunk_size: int, chunk_overlap: int) -> Tuple[List[str], List[Dict[str, int]]]:
+    """Split texts into token-based chunks using NLTK.
 
-def chunk_texts(
-    texts: List[str], chunk_size: int, chunk_overlap: int
-) -> Tuple[List[str], List[Dict[str, int]]]:
-    """Split texts into sentence-based chunks using token counts.
-
-    Each page is segmented into sentences, then reassembled into chunks that
-    do not exceed ``chunk_size`` tokens. Adjacent chunks share up to
-    ``chunk_overlap`` tokens for context continuity. Metadata tracks the page
-    number and sentence range for each chunk.
+    Each page is tokenized with :func:`nltk.word_tokenize`. Tokens are grouped into
+    fixed-size windows with ``chunk_overlap`` overlap. Metadata tracks the page number
+    and token index range for each chunk.
     """
-
     chunked_texts: List[str] = []
     metadatas: List[Dict[str, int]] = []
 
+    step = chunk_size - chunk_overlap
+    if step <= 0:
+        raise ValueError("chunk_overlap must be smaller than chunk_size")
+
     for page_num, text in enumerate(texts, start=1):
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-        token_counts = [len(s.split()) for s in sentences]
-        start = 0
-        while start < len(sentences):
-            token_total = 0
-            end = start
-            while end < len(sentences) and token_total + token_counts[end] <= chunk_size:
-                token_total += token_counts[end]
-                end += 1
-
-            chunk = " ".join(sentences[start:end])
-            chunked_texts.append(chunk)
-            metadatas.append(
-                {"page": page_num, "start_sentence": start + 1, "end_sentence": end}
-            )
-
-            if end >= len(sentences):
-                break
-
-            overlap_tokens = 0
-            overlap_start = end - 1
-            while overlap_start >= start and overlap_tokens < chunk_overlap:
-                overlap_tokens += token_counts[overlap_start]
-                overlap_start -= 1
-            start = overlap_start + 1
+        tokens = word_tokenize(text)
+        for start in range(0, len(tokens), step):
+            end = min(start + chunk_size, len(tokens))
+            chunked_texts.append(" ".join(tokens[start:end]))
+            metadatas.append({"page": page_num, "start_token": start, "end_token": end})
 
     return chunked_texts, metadatas
-
 
 def process_document(file_path: str, document_id: Any) -> None:
     logger.info("Begin processing document %s", document_id)
