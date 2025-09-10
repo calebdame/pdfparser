@@ -23,6 +23,23 @@ def _strip_markdown_code_fence(text: str) -> str:
     return text
 
 
+def _replace_null_strings(obj: Any) -> Any:
+    """Recursively convert string values equal to ``"null"`` into ``None``.
+
+    OpenAI sometimes returns the literal string ``"null"`` instead of a JSON
+    ``null`` value. This helper walks through dictionaries and lists to replace
+    such strings with ``None`` so downstream code can treat them consistently.
+    """
+
+    if isinstance(obj, dict):
+        return {k: _replace_null_strings(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_replace_null_strings(v) for v in obj]
+    if isinstance(obj, str) and obj.strip().lower() == "null":
+        return None
+    return obj
+
+
 def send_images_to_openai(
     images: List["Image.Image"],
     command: str,
@@ -162,7 +179,7 @@ def answer_questions_with_context(
             logger.info("OpenAI raw response: %s", raw_text)
             cleaned = _strip_markdown_code_fence(raw_text)
             try:
-                parsed = json.loads(cleaned)
+                parsed = _replace_null_strings(json.loads(cleaned))
                 if not isinstance(parsed, dict):
                     logger.error(
                         "OpenAI response JSON is type %s; expected object",
