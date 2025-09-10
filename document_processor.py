@@ -11,10 +11,11 @@ NLTK_DATA_DIR = os.environ.get(
 )
 os.makedirs(NLTK_DATA_DIR, exist_ok=True)
 nltk.data.path.append(NLTK_DATA_DIR)
-try:
-    nltk.data.find("tokenizers/punkt")
-except LookupError:
-    nltk.download("punkt", download_dir=NLTK_DATA_DIR, quiet=True)
+for pkg in ("punkt", "punkt_tab"):
+    try:
+        nltk.data.find(f"tokenizers/{pkg}")
+    except LookupError:
+        nltk.download(pkg, download_dir=NLTK_DATA_DIR, quiet=True)
 
 from pdf_service import process_pdf
 from ocr_service import ocr_images
