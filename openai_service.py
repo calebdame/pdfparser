@@ -123,7 +123,8 @@ def answer_questions_with_context(
         "For each question, it is extremely important to reply with a correctly formatted "
         "JSON object mapping the 'tag_term' to the "
         "best answer. If options are given, respond with one of them exactly.\n"
-        "If a question has no options, provide a concise answer under 300 characters.\n"
+        "The response must follow this exact schema: {\"tag_1\": \"answer_1\", ...}.\n"
+        "If a question has provided answer options, provide a concise answer and explanation in under 300 characters.\n"
         "If an answer cannot be determined from the context, respond with null for that tag_term.\n\n"
         f"Context:\n{context_text}\n\nQuestions:\n{questions_text}\n\n"
         "Return JSON only - Nothing that will cause parsing errors.  Also avoid exotic "
@@ -162,6 +163,12 @@ def answer_questions_with_context(
             cleaned = _strip_markdown_code_fence(raw_text)
             try:
                 parsed = json.loads(cleaned)
+                if not isinstance(parsed, dict):
+                    logger.error(
+                        "OpenAI response JSON is type %s; expected object",
+                        type(parsed).__name__,
+                    )
+                    parsed = {}
             except json.JSONDecodeError:
                 logger.exception("Failed to parse OpenAI response as JSON")
                 parsed = {}
