@@ -38,9 +38,10 @@ def ask_questions_for_categories(
     texts: List[str],
     metadatas: List[Dict[str, Any]],
     top_k: int = 5,
-) -> None:
-    """Iterate through categories, query FAISS, and send questions to OpenAI."""
+) -> Dict[str, Any]:
+    """Iterate through categories, query FAISS, send questions to OpenAI, and merge answers."""
     categories = load_questions(csv_path)
+    merged_answers: Dict[str, Any] = {}
     for category, questions in categories.items():
         logger.info("Processing category '%s'", category)
         parts: List[str] = [category]
@@ -59,3 +60,6 @@ def ask_questions_for_categories(
         raw, parsed = answer_questions_with_context(context, questions)
         logger.info("Raw response: %s", raw)
         logger.info("Parsed answers: %s", parsed)
+        merged_answers.update(parsed)
+    logger.info("Final merged answers: %s", merged_answers)
+    return merged_answers
