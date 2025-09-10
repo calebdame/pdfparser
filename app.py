@@ -1,11 +1,12 @@
 import os
 import logging
+import base64
 from typing import Any
 
 import nltk
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, UploadFile
 
-from document_processor import process_document
+from document_processor import process_document, process_document_bytes
 
 
 logging.basicConfig(level=logging.INFO)
@@ -32,6 +33,38 @@ app = FastAPI()
 async def root():
     logger.info("Root endpoint called")
     return {"status": "running"}
+
+
+@app.post("/process")
+async def process_endpoint(request: Request, background_tasks: BackgroundTasks):
+    content_type = request.headers.get("content-type", "")
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        upload = form.get("file")
+        document_id = form.get("document_id")
+        if not isinstance(upload, UploadFile):
+            raise HTTPException(status_code=400, detail="Missing file")
+        pdf_bytes = await upload.read()
+    else:
+        try:
+            payload = await request.json()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON") from exc
+        data = payload.get("data")
+        document_id = payload.get("document_id")
+        if not data:
+            raise HTTPException(status_code=400, detail="Missing PDF data")
+        try:
+            pdf_bytes = base64.b64decode(data)
+        except Exception as exc:
+            logger.warning("Invalid base64 PDF data: %s", exc)
+            raise HTTPException(status_code=400, detail="Invalid base64 data")
+
+    if not document_id:
+        raise HTTPException(status_code=400, detail="Missing document_id")
+
+    background_tasks.add_task(process_document_bytes, pdf_bytes, document_id)
+    return {"status": "queued"}
 
 
 @app.post("/webhook")
