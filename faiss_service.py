@@ -7,12 +7,26 @@ from typing import Any, Dict, List, Tuple
 from multiprocessing import get_context
 
 import faiss
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
 
 logger = logging.getLogger("pdfparser.faiss_service")
 
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 MODEL_BASE_PATH = Path(os.environ.get("API_VOLUME_DIR", "/data/api"))
+
+NLTK_DATA_DIR = os.environ.get(
+    "NLTK_DATA", os.path.join(os.path.dirname(__file__), "nltk_data")
+)
+os.makedirs(NLTK_DATA_DIR, exist_ok=True)
+nltk.data.path.append(NLTK_DATA_DIR)
+try:
+    stopwords.words("english")
+except LookupError:
+    nltk.download("stopwords", download_dir=NLTK_DATA_DIR, quiet=True)
+STOP_WORDS = set(stopwords.words("english"))
 
 
 def _model_dir(model_name: str) -> Path:
@@ -42,7 +56,9 @@ def preprocess_text(text: str) -> str:
     text = text.lower().strip()
     # Remove control characters
     text = re.sub(r"[\x00-\x1f\x7f]", "", text)
-    return text
+    tokens = word_tokenize(text)
+    tokens = [t for t in tokens if t.isalpha() and t not in STOP_WORDS]
+    return " ".join(tokens)
 
 
 def _encode_worker(texts: List[str], model_path: Path, queue) -> None:
