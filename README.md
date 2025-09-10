@@ -30,6 +30,22 @@ Log all data received to console
 URL. If it starts with `http://` or `https://`, the service downloads the PDF
 from that URL directly; otherwise it is appended to the `ENV_URL` prefix.
 
+### Direct PDF processing
+
+Instead of providing a URL, PDFs can be sent directly to the server. Submit the
+file with a `POST /process` request. The endpoint accepts either a multipart
+upload or a JSON body containing base64-encoded data:
+
+```sh
+curl -X POST -F "file=@document.pdf" -F "document_id=my-doc" http://localhost:8000/process
+```
+
+```sh
+curl -X POST http://localhost:8000/process \
+     -H 'Content-Type: application/json' \
+     -d '{"data":"<base64>","document_id":"my-doc"}'
+```
+
 ### OCR and FAISS Indexing
 
 PDF pages are now processed locally. The server converts each page to text using

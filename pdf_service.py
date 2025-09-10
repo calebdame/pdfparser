@@ -50,3 +50,24 @@ def process_pdf(file_path: str) -> List["Image.Image"]:
 
     logger.info("PDF has %d pages", len(images))
     return images
+
+
+def process_pdf_bytes(pdf_bytes: bytes) -> List["Image.Image"]:
+    """Convert in-memory PDF bytes to images.
+
+    Args:
+        pdf_bytes: Raw bytes of the PDF file.
+
+    Returns:
+        List of PIL Image objects representing each PDF page.
+    """
+    from pdf2image import convert_from_bytes
+
+    try:
+        images = convert_from_bytes(pdf_bytes)
+    except Exception as exc:
+        logger.exception("Failed to convert PDF bytes to images: %s", exc)
+        return []
+
+    logger.info("PDF has %d pages", len(images))
+    return images
