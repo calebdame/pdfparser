@@ -1,19 +1,23 @@
 FROM python:3.10-slim
 
-# Install system dependencies for PDF to image conversion and OCR
+# System deps for OCR/PDF + build toolchain (for regex) + FAISS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr libtesseract-dev poppler-utils \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    build-essential python3-dev pkg-config \
+    libgomp1 \
+  && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
 WORKDIR /app
-ENV NLTK_DATA=/app/nltk_data
-RUN mkdir -p $NLTK_DATA
+ENV NLTK_DATA=/app/nltk_data \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# (Helpful) Upgrade pip tooling to get better wheel resolution
+RUN pip install --upgrade pip setuptools wheel
+
+RUN pip install -r requirements.txt
+
 COPY . .
-
-# Default command uses PORT env var if provided
 CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]
