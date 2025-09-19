@@ -21,6 +21,7 @@ from pdf_service import process_pdf, process_pdf_bytes
 from ocr_service import ocr_images
 from faiss_service import build_faiss_index
 from question_answer_service import ask_questions_for_categories
+from supabase_service import update_document_status
 
 logger = logging.getLogger("pdfparser.document_processor")
 
@@ -49,6 +50,10 @@ def chunk_texts(texts: List[str], chunk_size: int, chunk_overlap: int) -> Tuple[
 
 def process_document(file_path: str, document_id: Any) -> None:
     logger.info("Begin processing document %s", document_id)
+
+    is_supabase_path = False
+    if isinstance(file_path, str):
+        is_supabase_path = not file_path.lower().startswith(("http://", "https://"))
 
     try:
         images = process_pdf(file_path)
@@ -91,9 +96,13 @@ def process_document(file_path: str, document_id: Any) -> None:
 
         qa_csv = os.environ.get("QA_CSV_PATH", "hoana_questions.csv")
         qa_top_k = int(os.environ.get("QA_TOP_K", 5))
-        ask_questions_for_categories(
+        merged_answers = ask_questions_for_categories(
             qa_csv, index, stored_texts, stored_metadatas, top_k=qa_top_k
         )
+
+        if is_supabase_path:
+            logger.info("Updating Supabase labels for document %s", document_id)
+            update_document_status(document_id, merged_answers, raw_json=True)
 
     finally:
         gc.collect()
