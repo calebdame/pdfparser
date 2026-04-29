@@ -2,7 +2,7 @@
 
 ### High level Goal when done
 
-This repo creates a webhook that accepts a payload from a Supabase instance, downloads the PDF links it shares, converts each page to an image, and processes the text locally. OpenAI calls are currently disabled; instead, the service logs OCR output and FAISS search results for testing purposes.
+This repo creates a webhook that accepts a payload from a Supabase instance, downloads the PDF link it shares, converts each page to an image, and processes the text locally. OpenAI calls are currently disabled; instead, the service logs OCR output and FAISS search results for testing purposes.
 
 ### Lower level beginning
 
